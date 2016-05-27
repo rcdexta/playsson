@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Tiles and Distance</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #f0f0f0;
+				margin: 0px;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+	<body>
+
+		<script src="libs/three.min.js"></script>
+
+		<script src="libs/Projector.js"></script>
+		<script src="libs/CanvasRenderer.js"></script>
+
+		<script src="libs/stats.min.js"></script>
+		<script src="libs/dat.gui.min.js"></script>
+		<script src="libs/VREffect.js"></script>
+
+		<script src="distance/PandaPath.js"></script>
+		<script src="distance/Hero.js"></script>
+		<script src="distance/Vehicle.js"></script>
+
+
+		<script>
+
+			var container, stats,gui;
+			var camera, scene, renderer,hero,light,effect;
+
+			var curve;
+			var panda;
+			
+			var vehicle1,vehicle2,vehicle3,vehicle4;
+			
+			var train;
+
+			var position = new THREE.Vector3();
+			
+			var tangent = new THREE.Vector3();
+			var lookAt = new THREE.Vector3();
+	
+			var PI2 = Math.PI * 2;
+			
+			var VELOCITY = 0.0002 ;
+			var faultFactor = 5;
+			
+			var vehicle1_vel = 0.0003
+			var vehicle2_vel = 0.0004
+			var vehicle3_vel = 0.0001
+			var vehicle4_vel = 0.0005
+			
+			var scale = 100;
+			var progress = 0;
+			var clock;
+			var time = 0;
+				
+			var group;
+			
+			var move=false;
+			var direction = -1;
+			
+			let LEFT = 1;
+			let FORWARD = 2;
+			let RIGHT = 3;
+			
+			var index=0;
+				
+			init();
+			animate();
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				var info = document.createElement( 'div' );
+				info.style.position = 'absolute';
+				info.style.top = '10px';
+				info.style.width = '100%';
+				info.style.textAlign = 'right';
+				info.innerHTML = '<a href="http://conceptpanda.com" target="_blank">Concept Panda</a> - Metro Fix';
+				container.appendChild( info );
+
+				stats = new Stats();
+				stats.domElement.style.position = 'absolute';
+				stats.domElement.style.top = '0px';
+				container.appendChild( stats.domElement );
+
+				renderer = new THREE.WebGLRenderer({ antialias: true });
+				renderer.setClearColor( 0xf0f0f0 );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				container.appendChild( renderer.domElement );
+
+				clock = new THREE.Clock();
+				effect = new THREE.VREffect( renderer );
+
+				prepareScene();
+				
+				setupPath();
+				
+				setupWarningBoards()
+				
+				setupBars();
+				
+				setupPillers();
+				
+				setupVehicles();
+				
+				
+				window.addEventListener( 'resize', onWindowResize, false );
+				
+				effect.render( scene, camera );
+			}
+			
+			function prepareScene()
+			{
+				scene = new THREE.Scene();
+
+				light = new THREE.HemisphereLight( 0xfff0f0, 0x606066 );
+				light.position.set( 1, 2, 1 );
+				scene.add( light );
+
+				panda = new Hero().hero();
+				scene.add( panda );
+				
+				train = new THREE.Object3D();
+				scene.add( train );
+
+				camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 4000 );
+				camera.rotation.y = Math.PI;
+				train.add( camera );
+
+				// environment
+
+				var geometry = new THREE.PlaneGeometry( 10000, 10000, 15, 15 );
+				geometry.applyMatrix( new THREE.Matrix4().makeRotationX( - Math.PI / 2 ) );
+				var material = new THREE.MeshLambertMaterial( { color: 0x407000} );
+
+				for ( var i = 0; i < geometry.vertices.length; i ++ ) {
+
+					var vertex = geometry.vertices[ i ];
+
+					vertex.x += Math.random() * 100 - 50;
+					vertex.z += Math.random() * 100 - 50;
+
+					var distance = ( vertex.distanceTo( scene.position ) / 5 ) - 250;
+
+					vertex.y = Math.random() * Math.max( 0, distance );
+				}
+
+				geometry.computeFaceNormals();
+				mesh = new THREE.Mesh( geometry, material );
+				scene.add( mesh );
+			}
+			
+
+			function setupPath()
+			{
+				curve = ( function () {
+
+					var vector = new THREE.Vector3();
+					var vector2 = new THREE.Vector3();
+
+					return {
+
+						getPointAt: function ( t ) {
+							
+							t = t * PI2;
+							
+							var x = Math.sin(3*t);	
+							var y = 0;
+							var z = t;
+
+							return vector.set( x, y, z ).multiplyScalar( 100 );
+
+						},
+
+						getTangentAt: function ( t ) {
+
+							var delta = 0.0001;
+							var t1 = Math.max( 0, t - delta );
+							var t2 = Math.min( 1, t + delta );
+
+							return vector2.copy( this.getPointAt ( t2 ) ).sub( this.getPointAt( t1 ) ).normalize();
+						}
+					};
+
+				} )();
+
+				var material = new THREE.MeshStandardMaterial( {roughness: 0.5, metalness: 0.1, vertexColors: THREE.VertexColors} );	
+				var pathGeometry = new PandaPathGeometry( curve, 100);
+				var path = new THREE.Mesh( pathGeometry, material );
+				scene.add(path)
+			}
+			
+			function setupTrackBlockers()
+			{
+				var material = new THREE.MeshLambertMaterial( { color: 0x606066 } );
+				var boardGeo = new THREE.BoxGeometry(5, 5);
+				for (var i=1;i<4;i++)
+				{
+					var board = new THREE.Mesh( boardGeo, material );
+					
+					var fault = 0.01 * (faultFactor*i);
+					var point = curve.getPointAt(fault);
+					var tangent = curve.getTangentAt(fault);
+					
+					board.position.copy(point);
+					board.rotation.y = tangent.x
+
+					board.rotateX(Math.PI/2);
+					board.position.y=1;
+					scene.add( board );
+				}
+			}
+
+			function setupWarningBoards()
+			{
+				var material = new THREE.MeshLambertMaterial( { color: 0xff0000} );
+				var boardGeo = new THREE.BoxGeometry(1, 9);
+				for (var i=1;i<4;i++)
+				{
+					var board = new THREE.Mesh( boardGeo, material );
+					
+					var fault = 0.01 * ((faultFactor)*i);
+					var point = curve.getPointAt(fault);
+					var tangent = curve.getTangentAt(fault);
+					
+					board.position.copy(point);
+					board.rotation.y = tangent.x
+					board.position.x+=5;
+					scene.add( board );
+				}
+			}
+	
+			function setupPillers()
+			{
+				var material = new THREE.MeshLambertMaterial( { color: 0x00ff22, shading: THREE.FlatShading } );
+				var boardGeo = new THREE.BoxGeometry(1, 5);
+				for (var i=1;i<50;i++)
+				{
+					var board = new THREE.Mesh( boardGeo, material );
+					
+					var fault = 0.01 * (2*i);
+					var point = curve.getPointAt(fault);
+					var tangent = curve.getTangentAt(fault);
+					
+					board.position.copy(point);
+					board.rotation.y = tangent.x
+					scene.add( board );
+				}
+			}
+		
+			function setupBars()
+			{
+				var material = new THREE.MeshLambertMaterial( { color: 0x606066} );
+				var barGeo = new THREE.CylinderGeometry(0.15,0.20,15);
+				
+				for(var i=1;i<50;i++)
+				{
+					var index = 0.01 * (2 * i);
+					var point = curve.getPointAt(index);
+					var tangent = curve.getTangentAt(index);
+	
+					var barL = new THREE.Mesh(barGeo,material);
+		
+					barL.position.copy(point);
+					barL.position.x += 20;
+					barL.rotation.y = tangent.x;
+					scene.add(barL);
+					
+					var barR = new THREE.Mesh(barGeo,material);
+		
+					barR.position.copy(point);
+					barR.position.x -= 20;
+					barR.rotation.y = tangent.x;
+					scene.add(barR);
+				}
+			}
+			
+			function animate() {
+
+				time = clock.getDelta();
+			
+				requestAnimationFrame( animate );
+				
+				adjustPanda();
+
+				adjustCamera();
+				
+				vehicle1.run();
+				vehicle2.run();
+				vehicle3.run();
+				vehicle4.run();
+				
+				effect.render( scene, camera );
+			}	
+			
+		
+			function adjustCamera()
+			{
+				progress += VELOCITY;
+				progress = progress%1;
+				
+				position.copy( curve.getPointAt( progress ) );
+				tangent.copy( curve.getTangentAt( progress ) );
+			
+				position.y += 3;
+			
+				train.position.copy( position );
+				lookAt.copy(position).add(tangent);
+				train.lookAt( lookAt );
+			}
+			
+			function adjustPanda()
+			{
+				var pandaProgress = progress+0.01
+			
+				position.copy( curve.getPointAt( pandaProgress) );
+				tangent.copy(curve.getTangentAt(pandaProgress) );
+				
+				position.x-=10;
+				position.y=0.5;
+				
+				panda.position.copy( position );
+				lookAt.copy(position).add(tangent);
+				panda.lookAt(lookAt)
+			}
+			
+			function setupVehicles()
+			{
+				vehicle1 = new Vehicle(scene,curve,vehicle1_vel);
+				vehicle2 = new Vehicle(scene,curve,vehicle2_vel);
+				vehicle3 = new Vehicle(scene,curve,vehicle3_vel);
+				vehicle4 = new Vehicle(scene,curve,vehicle4_vel);
+			}
+			
+			
+			function onWindowResize() {
+
+				camera.left = window.innerWidth / - 2;
+				camera.right = window.innerWidth / 2;
+				camera.top = window.innerHeight / 2;
+				camera.bottom = window.innerHeight / - 2;
+
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+		</script>
+
+	</body>
+</html>
