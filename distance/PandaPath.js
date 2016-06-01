@@ -42,8 +42,8 @@ var PandaPathGeometry = function ( curve, size ) {
 	
 	var black = [ 0, 0, 0 ];
 	var yellow = [ 1, 1, 0 ];
-	var cyan = [0,1,1];
-	var blue = [1,1,1];
+	var cyan = [1.05,0.89,0.65];
+	var blue = [1.02,0.79,0.61];
 	
 	var defects = [];
 	
@@ -138,11 +138,14 @@ var PandaPathGeometry = function ( curve, size ) {
 			vector4.applyQuaternion( prevQuaternion );
 			vector4.add( prevPoint );
 
-			vertices.push( vector4.x, vector4.y, vector4.z );
-			vertices.push( vector2.x, vector2.y, vector2.z );
-			vertices.push( vector3.x, vector3.y, vector3.z );
-	
-			//
+			vertices.push( vector1.x, vector1.y-0.5, vector1.z );
+			vertices.push( vector2.x, vector2.y-0.1, vector2.z );
+			vertices.push( vector4.x, vector4.y-0.25, vector4.z );
+
+			vertices.push( vector2.x, vector2.y-0.1, vector2.z );
+			vertices.push( vector3.x, vector3.y-0.5, vector3.z );
+			vertices.push( vector4.x, vector4.y-0.75, vector4.z );
+
 			normal1.copy( point1 );
 			normal1.applyQuaternion( quaternion );
 			normal1.normalize();
@@ -159,9 +162,17 @@ var PandaPathGeometry = function ( curve, size ) {
 			normal4.applyQuaternion( prevQuaternion );
 			normal4.normalize();
 
+			normals.push( normal1.x, normal1.y-1, normal1.z );
+			normals.push( normal2.x, normal2.y-1, normal2.z );
 			normals.push( normal4.x, normal4.y, normal4.z );
+
 			normals.push( normal2.x, normal2.y, normal2.z );
 			normals.push( normal3.x, normal3.y, normal3.z );
+			normals.push( normal4.x, normal4.y, normal4.z );
+
+			colors.push( color[ 0 ], color[ 1 ], color[ 2 ] );
+			colors.push( color[ 0 ], color[ 1 ], color[ 2 ] );
+			colors.push( color[ 0 ], color[ 1 ], color[ 2 ] );
 
 			colors.push( color[ 0 ], color[ 1 ], color[ 2 ] );
 			colors.push( color[ 0 ], color[ 1 ], color[ 2 ] );
@@ -180,7 +191,7 @@ var PandaPathGeometry = function ( curve, size ) {
 	
 	var isFaulty = function(index)
 	{
-		return index == 5 || index == 10 || index == 15;
+		return index == 16;
 	}
 
 	
@@ -230,10 +241,6 @@ var PandaPathGeometry = function ( curve, size ) {
 		prevPoint.copy( point );
 		prevQuaternion.copy( quaternion );
 	}
-
-
-
-	// console.log( vertices.length );
 
 	this.addAttribute( 'position', new THREE.BufferAttribute( new Float32Array( vertices ), 3 ) );
 	this.addAttribute( 'normal', new THREE.BufferAttribute( new Float32Array( normals ), 3 ) );

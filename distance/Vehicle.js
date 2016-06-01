@@ -6,6 +6,7 @@ class Vehicle
 {
 	constructor(scene,path,velocity)
 	{
+
 		var geometry = new THREE.BoxGeometry( 0.25, 3, 3 );
 		var material = new THREE.MeshPhongMaterial( { color: 0xff55ff, emissive: 0x004400, shading: THREE.FlatShading, shininess: 10 } );
 		this.mesh = new THREE.Mesh( geometry, material );

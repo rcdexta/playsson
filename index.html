@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>Tiles and Distance</title>
+		<title>Distance</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		<style>
@@ -28,50 +28,74 @@
 		<script src="distance/Hero.js"></script>
 		<script src="distance/Vehicle.js"></script>
 
-
 		<script>
 
-			var container, stats,gui;
-			var camera, scene, renderer,hero,light,effect;
+			var container, stats;
+			var camera, scene, renderer,light,effect;
 
 			var curve;
-			var panda;
-			
-			var vehicle1,vehicle2,vehicle3,vehicle4;
-			
+
 			var train;
+			var vehicle1,vehicle2,vehicle3,vehicle4;
+				
+	
+			let PI2 = Math.PI * 2;			
+			let VELOCITY = 0.0002 ;
+
+			let SCALE = 100;			
+			let FAULT_FACTOR = 16;	
+			let DIVISION=4;
+			let PATH_LENGTH = SCALE/DIVISION;
+			
+			
+			let vehicle1_vel = 0.0003
+			let vehicle2_vel = 0.0004
+			let vehicle3_vel = 0.0001
+			let vehicle4_vel = 0.0005
 
 			var position = new THREE.Vector3();
-			
 			var tangent = new THREE.Vector3();
 			var lookAt = new THREE.Vector3();
-	
-			var PI2 = Math.PI * 2;
-			
-			var VELOCITY = 0.0002 ;
-			var faultFactor = 5;
-			
-			var vehicle1_vel = 0.0003
-			var vehicle2_vel = 0.0004
-			var vehicle3_vel = 0.0001
-			var vehicle4_vel = 0.0005
-			
-			var scale = 100;
+
+			var unitDistance = 0;		
 			var progress = 0;
 			var clock;
-			var time = 0;
-				
-			var group;
-			
-			var move=false;
-			var direction = -1;
-			
-			let LEFT = 1;
-			let FORWARD = 2;
-			let RIGHT = 3;
-			
-			var index=0;
-				
+			var boardIndex = 0;
+					
+			var textureLoader = new THREE.TextureLoader();
+
+			var pandaTexture = textureLoader.load('textures/panda.jpg');
+			var pandaMaterial = new THREE.MeshBasicMaterial( {map:pandaTexture} );
+
+			var errorTexture = textureLoader.load('textures/error.png');
+			var errorMaterial = new THREE.MeshBasicMaterial( {map:errorTexture} );
+
+			var boardMaterial = new THREE.MeshLambertMaterial( { color: "rgb(28,96, 97)"} );
+
+			var textMaterial = new THREE.MultiMaterial( [
+					new THREE.MeshPhongMaterial( { color: 0xffffff, shading: THREE.FlatShading } ), // front
+					new THREE.MeshPhongMaterial( { color: 0xffffff, shading: THREE.SmoothShading } ) // side
+				] );
+
+		
+			var lessonBoards = []
+		
+			var written=false;
+
+			let BEFORE_START = 0;
+			let READY = 1
+			let GO = 2;
+			let WAIT = -1;
+
+			var gameState=BEFORE_START;
+
+			var target = new THREE.Vector3();
+			var lon = 90, lat = 0;
+			var phi = 0, theta = 0;
+
+			var touchX,touchY;
+
+
 			init();
 			animate();
 
@@ -85,7 +109,7 @@
 				info.style.top = '10px';
 				info.style.width = '100%';
 				info.style.textAlign = 'right';
-				info.innerHTML = '<a href="http://conceptpanda.com" target="_blank">Concept Panda</a> - Metro Fix';
+				info.innerHTML = '<a href="http://conceptpanda.com" target="_blank">Concept Panda</a> - A travel to Pandaras';
 				container.appendChild( info );
 
 				stats = new Stats();
@@ -103,21 +127,26 @@
 				effect = new THREE.VREffect( renderer );
 
 				prepareScene();
+
+				setupEnv();
 				
 				setupPath();
 				
-				setupWarningBoards()
-				
-				setupBars();
+				setupDistanceBoards();
 				
 				setupPillers();
 				
 				setupVehicles();
+
+				installLessonBoardAt(1);
 				
+				installLessonBoardAt(FAULT_FACTOR);
 				
 				window.addEventListener( 'resize', onWindowResize, false );
 				
-				effect.render( scene, camera );
+				renderer.render( scene, camera );
+
+				document.addEventListener( 'mousedown', onDocumentMouseMove, false );
 			}
 			
 			function prepareScene()
@@ -128,9 +157,6 @@
 				light.position.set( 1, 2, 1 );
 				scene.add( light );
 
-				panda = new Hero().hero();
-				scene.add( panda );
-				
 				train = new THREE.Object3D();
 				scene.add( train );
 
@@ -138,11 +164,17 @@
 				camera.rotation.y = Math.PI;
 				train.add( camera );
 
-				// environment
+				camera.position.x = 1.32
+				camera.position.y = 3
+				camera.position.z = 0.44;
+	
+			}
+
+			function setupEnv()
+			{
 
 				var geometry = new THREE.PlaneGeometry( 10000, 10000, 15, 15 );
 				geometry.applyMatrix( new THREE.Matrix4().makeRotationX( - Math.PI / 2 ) );
-				var material = new THREE.MeshLambertMaterial( { color: 0x407000} );
 
 				for ( var i = 0; i < geometry.vertices.length; i ++ ) {
 
@@ -157,7 +189,11 @@
 				}
 
 				geometry.computeFaceNormals();
-				mesh = new THREE.Mesh( geometry, material );
+
+				var envTexture = textureLoader.load('textures/sprite.png');
+				var envMaterial = new THREE.MeshBasicMaterial( {map:envTexture} );
+
+				mesh = new THREE.Mesh( geometry, envMaterial );
 				scene.add( mesh );
 			}
 			
@@ -179,7 +215,7 @@
 							var y = 0;
 							var z = t;
 
-							return vector.set( x, y, z ).multiplyScalar( 100 );
+							return vector.set( x, y, z ).multiplyScalar( SCALE );
 
 						},
 
@@ -195,118 +231,334 @@
 
 				} )();
 
-				var material = new THREE.MeshStandardMaterial( {roughness: 0.5, metalness: 0.1, vertexColors: THREE.VertexColors} );	
-				var pathGeometry = new PandaPathGeometry( curve, 100);
-				var path = new THREE.Mesh( pathGeometry, material );
+				var pathGeometry = new PandaPathGeometry(curve, SCALE)
+				var pathMaterial = new THREE.MeshStandardMaterial( {roughness: 0.1,metalness: 0, vertexColors: THREE.VertexColors} );	
+				
+				var path = new THREE.Mesh( pathGeometry, pathMaterial );		
+		
 				scene.add(path)
 			}
 			
-			function setupTrackBlockers()
-			{
-				var material = new THREE.MeshLambertMaterial( { color: 0x606066 } );
-				var boardGeo = new THREE.BoxGeometry(5, 5);
-				for (var i=1;i<4;i++)
-				{
-					var board = new THREE.Mesh( boardGeo, material );
-					
-					var fault = 0.01 * (faultFactor*i);
-					var point = curve.getPointAt(fault);
-					var tangent = curve.getTangentAt(fault);
-					
-					board.position.copy(point);
-					board.rotation.y = tangent.x
-
-					board.rotateX(Math.PI/2);
-					board.position.y=1;
-					scene.add( board );
-				}
-			}
-
-			function setupWarningBoards()
-			{
-				var material = new THREE.MeshLambertMaterial( { color: 0xff0000} );
-				var boardGeo = new THREE.BoxGeometry(1, 9);
-				for (var i=1;i<4;i++)
-				{
-					var board = new THREE.Mesh( boardGeo, material );
-					
-					var fault = 0.01 * ((faultFactor)*i);
-					var point = curve.getPointAt(fault);
-					var tangent = curve.getTangentAt(fault);
-					
-					board.position.copy(point);
-					board.rotation.y = tangent.x
-					board.position.x+=5;
-					scene.add( board );
-				}
-			}
-	
+		
 			function setupPillers()
 			{
-				var material = new THREE.MeshLambertMaterial( { color: 0x00ff22, shading: THREE.FlatShading } );
-				var boardGeo = new THREE.BoxGeometry(1, 5);
-				for (var i=1;i<50;i++)
+				var pillerTexture = textureLoader.load( 'textures/stone.jpg' );
+				var pillerMaterial = new THREE.MeshBasicMaterial( {map: pillerTexture} );
+
+				var pillerGeo = new THREE.BoxGeometry(1, 5);
+				for (var i=1;i<PATH_LENGTH;i++)
 				{
-					var board = new THREE.Mesh( boardGeo, material );
+					var piller = new THREE.Mesh( pillerGeo, pillerMaterial );
 					
-					var fault = 0.01 * (2*i);
-					var point = curve.getPointAt(fault);
-					var tangent = curve.getTangentAt(fault);
+					var place = 0.01 * (2*i);
+					var point = curve.getPointAt(place);
+					var tangent = curve.getTangentAt(place);
 					
-					board.position.copy(point);
-					board.rotation.y = tangent.x
-					scene.add( board );
+					piller.position.copy(point);
+					piller.rotation.y = tangent.x-0.314
+					scene.add( piller );
 				}
 			}
 		
-			function setupBars()
+			function setupDistanceBoards()
 			{
-				var material = new THREE.MeshLambertMaterial( { color: 0x606066} );
-				var barGeo = new THREE.CylinderGeometry(0.15,0.20,15);
-				
-				for(var i=1;i<50;i++)
-				{
-					var index = 0.01 * (2 * i);
-					var point = curve.getPointAt(index);
-					var tangent = curve.getTangentAt(index);
-	
-					var barL = new THREE.Mesh(barGeo,material);
-		
-					barL.position.copy(point);
-					barL.position.x += 20;
-					barL.rotation.y = tangent.x;
-					scene.add(barL);
-					
-					var barR = new THREE.Mesh(barGeo,material);
-		
-					barR.position.copy(point);
-					barR.position.x -= 20;
-					barR.rotation.y = tangent.x;
-					scene.add(barR);
-				}
-			}
+				var boardGeo = new THREE.BoxGeometry(2,2);
+
+				var barGeo = new THREE.CylinderGeometry(0.02,0.02,5);
+
+				var distanceBoards = []
 			
+				for(var i=1;i<PATH_LENGTH;i++)
+				{
+					var place = 0.01 * (DIVISION * i);
+					var point = curve.getPointAt(place);
+					var tangent = curve.getTangentAt(place);
+	
+					var boardL = new THREE.Mesh(boardGeo,boardMaterial);
+		
+					boardL.position.copy(point);
+					boardL.position.x += 20;
+					boardL.rotation.y = tangent.x-0.314
+					scene.add(boardL);
+					
+					
+					var distanceBoard = new THREE.Group();
+
+					var boardR = new THREE.Mesh(boardGeo,boardMaterial);
+					var bar = new THREE.Mesh(barGeo,boardMaterial);
+					
+					distanceBoard.add(boardR);
+					distanceBoard.add(bar);
+
+					distanceBoard.position.copy(point);
+					distanceBoard.position.y += 7.5
+					distanceBoard.rotation.y = tangent.x-0.314
+
+					bar.position.y-=2.5;
+					bar.position.z=0.75
+
+					distanceBoards.push(distanceBoard);
+
+					scene.add(distanceBoard);
+				}
+
+				writeDistanceRemaining(distanceBoards);
+			}
+
+			function writeDistanceRemaining(distanceBoards)
+			{
+				var loader = new THREE.FontLoader();
+				var fontName = 'helvetiker';
+				var fontWeight = 'bold';
+
+				loader.load( 'fonts/' + fontName + '_' + fontWeight + '.typeface.js', function ( response ) {
+
+					var font = response;
+
+					for (i=0;i<distanceBoards.length;i++)
+					{
+						var text = ""+(PATH_LENGTH-i);
+
+						paintDistance(distanceBoards[i],text,font)
+					}
+
+				} );
+			}
+
+			function paintDistance(textNode,text,font)
+			{
+		
+				var cityGeo = new THREE.TextGeometry( "Pandaras",{font:font, size: 0.30, height:0.25, material: 0, extrudeMaterial: 1} )
+				var textGeo = new THREE.TextGeometry( text, {font:font, size: 0.70, height:0.5, material: 0, extrudeMaterial: 1} )
+				var unitGeo = new THREE.TextGeometry( "m", {font:font, size: 0.30, height:0.25, material: 0, extrudeMaterial: 1} )
+
+			
+				var city = new THREE.Mesh(cityGeo,textMaterial);
+				var text = new THREE.Mesh(textGeo,textMaterial);
+				var unit = new THREE.Mesh(unitGeo,textMaterial);
+
+				textNode.add(city);
+				city.position.x+=0.9
+				city.position.y+=0.5
+				city.rotation.y = Math.PI
+
+				textNode.add(text);
+				text.position.x+=0.45
+				text.position.y-=0.37
+				text.rotation.y = Math.PI
+
+				textNode.add(unit);
+				unit.position.x+=0.18
+				unit.position.y-=0.85
+				unit.rotation.y = Math.PI
+			}
+		
+		
+			function installLessonBoardAt(id)
+			{
+				var warningMaterial = new THREE.MeshLambertMaterial( { color: "rgb(107,0, 1)"} );
+
+				var boardGeo = new THREE.BoxGeometry(10,4);
+				var warningInfoGeo = new THREE.BoxGeometry(4,2);
+			
+		
+				var place = 0.01 * (id); 
+				var point = curve.getPointAt(place);
+				var tangent = curve.getTangentAt(place);
+		
+				var lesson = new THREE.Group();
+
+				var board = new THREE.Mesh(boardGeo,boardMaterial);
+				var warningInfoLeft = new THREE.Mesh(warningInfoGeo,errorMaterial);
+				var warningInfoRight = new THREE.Mesh(warningInfoGeo,pandaMaterial);
+			
+				lesson.add(board);
+				lesson.add(warningInfoLeft)
+				lesson.add(warningInfoRight)
+			
+				lesson.position.copy(point);
+				lesson.position.y += 4.5
+				lesson.rotation.y = tangent.x-0.314
+				warningInfoLeft.position.y += 3
+				warningInfoLeft.position.x += 3
+			
+				warningInfoRight.position.y += 3
+				warningInfoRight.position.x -= 3
+			
+				lessonBoards.push(lesson);
+			
+				scene.add(lesson);				
+			}
+
+
+			
+
+
+			function writeLessons()
+			{
+				if(written)
+				{
+					return;
+				}
+
+							
+				var loader = new THREE.FontLoader();
+				var fontName = 'helvetiker';
+				var fontWeight = 'bold';
+
+				loader.load( 'fonts/' + fontName + '_' + fontWeight + '.typeface.js', function ( response ) {
+
+					var font = response;
+					paintInstruction(lessonBoards[0],font);
+					paintLesson(lessonBoards[1],font);
+					written = true;
+				} );
+			}
+
+			function paintInstruction(textNode,font)
+			{
+		
+				var line1 = "Welcome to this Journey to Pandaras"
+				var line2 = "Pandaras is located 25 metres from here."
+				var line3 = "You are going to travel on this elevated high-way."
+				var line4 = "The high-way is built with colored slabs."
+				var line5 = "Beware of broken slabs on the way."
+				var line6 = "Observe the number of slabs between posts."
+				var line7 = "A panda will help you on your mission."
+
+
+				var y = addHeaderText(textNode,line1,font,1.5);
+				y=addText(textNode,line2,font,y);
+				y=addText(textNode,line3,font,y);
+				y=addText(textNode,line4,font,y);
+				y=addText(textNode,line5,font,y);
+				y=addText(textNode,line6,font,y);
+				y=addText(textNode,line7,font,y);
+
+				textNode.rotation.y+=0.628
+			}
+
+			function paintLesson(textNode,font)
+			{
+		
+				var line1 = "What is the distance you travelled?"
+
+				var tiles = FAULT_FACTOR-1;
+
+				var line2 = "You travelled "+tiles+" slabs.";
+				var line3 = "You observed "+DIVISION+" slabs for every metre.";
+
+				var line4 = "Hence the length of one slab = 1 meter/"+DIVISION;
+				var line5 = "Thus the total distance travelled = "+tiles+" x 1/"+DIVISION+" metre."
+				
+				var line6 = "So, You travelled a distance of "+(tiles*1/DIVISION)+ " metre."
+
+				var y = addHeaderText(textNode,line1,font,1.5);
+				y=addText(textNode,line2,font,y);
+				y=addText(textNode,line3,font,y);
+				y=addText(textNode,line4,font,y);
+				y=addText(textNode,line5,font,y);
+				y=addText(textNode,line6,font,y);
+			}
+
+			function addText(container,text,font,y)
+			{
+				var lineGeo = new THREE.TextGeometry( text, {font:font, size: 0.20, height:0.15, material: 0, extrudeMaterial: 1} )
+				var mesh = new THREE.Mesh(lineGeo,textMaterial);
+				container.add(mesh);
+
+				mesh.position.x+=4.5
+				mesh.position.y+=y
+				mesh.rotation.y = Math.PI
+
+				return y-0.5;
+			}
+
+			function addHeaderText(container,text,font,y)
+			{
+				var lineGeo = new THREE.TextGeometry( text, {font:font, size: 0.20, height:0.15, material: 0, extrudeMaterial: 1} )
+				var mesh = new THREE.Mesh(lineGeo,textMaterial);
+				container.add(mesh);
+
+				mesh.position.x+=2.5
+				mesh.position.y+=y
+				mesh.rotation.y = Math.PI
+
+				return y-0.5;
+			}
+
 			function animate() {
 
-				time = clock.getDelta();
-			
 				requestAnimationFrame( animate );
-				
-				adjustPanda();
 
-				adjustCamera();
-				
+				if(shouldWait())
+				{
+					gameState = WAIT;
+				}
+			
+				switch(gameState)
+				{
+					case BEFORE_START:
+						beforeStart();
+						break;
+
+					case READY:
+						ready();
+						break;
+
+					case GO:
+						go();
+						break;
+				}
+
 				vehicle1.run();
 				vehicle2.run();
 				vehicle3.run();
 				vehicle4.run();
 				
-				effect.render( scene, camera );
+				renderer.render( scene, camera );
+			}
+
+
+			function onDocumentMouseMove( event ) {
+
+				if(gameState == BEFORE_START)
+				{
+					gameState = READY;
+				}
+
+				if(gameState == WAIT)
+				{
+					gameState = GO;
+					go();
+				}
+			}
+
+			function shouldWait()
+			{
+				if(gameState != GO)
+				{
+					return false;
+				}
+
+				if(unitDistance == (FAULT_FACTOR-1)*50)
+				{
+					return true;
+				}
+				if(unitDistance == 1)
+				{
+					return true;
+				}
+
+				return false;
 			}	
 			
 		
-			function adjustCamera()
+			function go()
 			{
+
+				unitDistance++;
+
 				progress += VELOCITY;
 				progress = progress%1;
 				
@@ -314,27 +566,47 @@
 				tangent.copy( curve.getTangentAt( progress ) );
 			
 				position.y += 3;
-			
+
 				train.position.copy( position );
 				lookAt.copy(position).add(tangent);
 				train.lookAt( lookAt );
 			}
-			
-			function adjustPanda()
+
+			function beforeStart()
 			{
-				var pandaProgress = progress+0.01
-			
-				position.copy( curve.getPointAt( pandaProgress) );
-				tangent.copy(curve.getTangentAt(pandaProgress) );
+				unitDistance++;
+
+				if(unitDistance >= 1000)
+				{
+					gameState = READY;
+				}
+
+				progress += (VELOCITY/2);
+				progress = progress%1;
 				
-				position.x-=10;
-				position.y=0.5;
-				
-				panda.position.copy( position );
-				lookAt.copy(position).add(tangent);
-				panda.lookAt(lookAt)
+				position.copy(curve.getPointAt( progress ));
+
+				camera.position.copy(position);
+				camera.position.y = 15
 			}
-			
+
+
+			function ready()
+			{		
+				camera.position.x = 0.314
+				camera.position.y = 0.314
+				camera.position.z = 0;
+
+	
+				progress = 0;
+				unitDistance = 0;
+
+				writeLessons();
+
+				gameState = GO;
+			}
+
+
 			function setupVehicles()
 			{
 				vehicle1 = new Vehicle(scene,curve,vehicle1_vel);
