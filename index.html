@@ -81,18 +81,19 @@
 			var lessonBoards = []
 		
 			var written=false;
+			var font;
 
 			let BEFORE_START = 0;
-			let READY = 1
-			let GO = 2;
-			let WAIT = -1;
+			let INSTRUCTION_STATE_1 = 1;		
+			let INSTRUCTION_STATE_2 = 2;				
+			let GO = 3;
+			let LESSON_STATE = 4;
+
+			var shouldWait = false;
 
 			var gameState=BEFORE_START;
 
-			var target = new THREE.Vector3();
-			var lon = 90, lat = 0;
-			var phi = 0, theta = 0;
-
+		
 			var touchX,touchY;
 
 
@@ -390,10 +391,6 @@
 				scene.add(lesson);				
 			}
 
-
-			
-
-
 			function writeLessons()
 			{
 				if(written)
@@ -408,37 +405,62 @@
 
 				loader.load( 'fonts/' + fontName + '_' + fontWeight + '.typeface.js', function ( response ) {
 
-					var font = response;
-					paintInstruction(lessonBoards[0],font);
-					paintLesson(lessonBoards[1],font);
+					font = response;
+					paintFirstInstruction();
+					paintLesson(lessonBoards[1]);
 					written = true;
 				} );
 			}
 
-			function paintInstruction(textNode,font)
+			function paintFirstInstruction()
 			{
 		
+				var textNode = lessonBoards[0];
+
 				var line1 = "Welcome to this Journey to Pandaras"
-				var line2 = "Pandaras is located 25 metres from here."
-				var line3 = "You are going to travel on this elevated high-way."
-				var line4 = "The high-way is built with colored slabs."
+				var line2 = "Pandaras is a wonderful city that is located at 25 metres from here."
+				var line3 = "You will travel on this elevated high-way that leads to Pandaras."
+				var line4 = "The high-way is built up with colored slabs."
 				var line5 = "Beware of broken slabs on the way."
-				var line6 = "Observe the number of slabs between posts."
+				var line6 = "Hint: Observe the number of slabs between posts."
 				var line7 = "A panda will help you on your mission."
 
 
-				var y = addHeaderText(textNode,line1,font,1.5);
-				y=addText(textNode,line2,font,y);
-				y=addText(textNode,line3,font,y);
-				y=addText(textNode,line4,font,y);
-				y=addText(textNode,line5,font,y);
-				y=addText(textNode,line6,font,y);
-				y=addText(textNode,line7,font,y);
+				var y = addHeaderText(textNode,line1,1.5);
+				y=addText(textNode,line2,y,"ins_1");
+				y=addText(textNode,line3,y,"ins_2");
+				y=addText(textNode,line4,y,"ins_3");
+				y=addText(textNode,line5,y,"ins_4");
+				y=addText(textNode,line6,y,"ins_5");
+				y=addText(textNode,line7,y,"ins_6");
 
 				textNode.rotation.y+=0.628
 			}
 
-			function paintLesson(textNode,font)
+			function paintSecondInstruction()
+			{
+		
+				removeText("ins_1")
+				removeText("ins_2")
+				removeText("ins_3")
+				removeText("ins_4")
+				removeText("ins_5")
+				removeText("ins_6")
+
+				var line = "Wishing you a safe journey."
+
+				var textNode = lessonBoards[0];
+				addText(textNode,line,1,"ins_2");
+			}
+
+			function removeText(name)
+			{
+				var selectedObject = scene.getObjectByName(name);
+				selectedObject.visible = false;				
+    			scene.remove( selectedObject );
+   			}
+
+			function paintLesson(textNode)
 			{
 		
 				var line1 = "What is the distance you travelled?"
@@ -453,28 +475,30 @@
 				
 				var line6 = "So, You travelled a distance of "+(tiles*1/DIVISION)+ " metre."
 
-				var y = addHeaderText(textNode,line1,font,1.5);
-				y=addText(textNode,line2,font,y);
-				y=addText(textNode,line3,font,y);
-				y=addText(textNode,line4,font,y);
-				y=addText(textNode,line5,font,y);
-				y=addText(textNode,line6,font,y);
+				var y = addHeaderText(textNode,line1,1.5);
+				y=addText(textNode,line2,y,"lesson_l_1");
+				y=addText(textNode,line3,y,"lesson_l_2");
+				y=addText(textNode,line4,y,"lesson_l_3");
+				y=addText(textNode,line5,y,"lesson_l_4");
+				y=addText(textNode,line6,y,"lesson_l_5");
 			}
 
-			function addText(container,text,font,y)
+			function addText(container,text,y,line_id)
 			{
 				var lineGeo = new THREE.TextGeometry( text, {font:font, size: 0.20, height:0.15, material: 0, extrudeMaterial: 1} )
 				var mesh = new THREE.Mesh(lineGeo,textMaterial);
 				container.add(mesh);
 
+
 				mesh.position.x+=4.5
 				mesh.position.y+=y
 				mesh.rotation.y = Math.PI
+				mesh.name = line_id
 
 				return y-0.5;
 			}
 
-			function addHeaderText(container,text,font,y)
+			function addHeaderText(container,text,y)
 			{
 				var lineGeo = new THREE.TextGeometry( text, {font:font, size: 0.20, height:0.15, material: 0, extrudeMaterial: 1} )
 				var mesh = new THREE.Mesh(lineGeo,textMaterial);
@@ -491,26 +515,9 @@
 
 				requestAnimationFrame( animate );
 
-				if(shouldWait())
-				{
-					gameState = WAIT;
-				}
 			
-				switch(gameState)
-				{
-					case BEFORE_START:
-						beforeStart();
-						break;
-
-					case READY:
-						ready();
-						break;
-
-					case GO:
-						go();
-						break;
-				}
-
+				executeState();
+			
 				vehicle1.run();
 				vehicle2.run();
 				vehicle3.run();
@@ -519,42 +526,62 @@
 				renderer.render( scene, camera );
 			}
 
+			function executeState()
+			{
+				if(shouldWait)
+				{
+					return;
+				}
+
+				switch(gameState)
+				{
+					case BEFORE_START:
+						onStart();
+						break;
+
+					case INSTRUCTION_STATE_1:
+						onReady();
+						break;
+
+					case INSTRUCTION_STATE_2:
+						onReady();
+						break;
+
+					case GO:
+						onGo();
+						break;
+
+					case LESSON_STATE:
+						onLesson();
+						break;
+
+				}
+			}
+
 
 			function onDocumentMouseMove( event ) {
 
 				if(gameState == BEFORE_START)
 				{
-					gameState = READY;
+					gameState = INSTRUCTION_STATE_1;
 				}
-
-				if(gameState == WAIT)
+				else if(gameState == INSTRUCTION_STATE_1)
+				{
+					gameState = INSTRUCTION_STATE_2;
+				}
+				else if(gameState == INSTRUCTION_STATE_2)
 				{
 					gameState = GO;
-					go();
 				}
+				else if(gameState == LESSON_STATE)
+				{
+					gameState = GO;
+				}
+				shouldWait = false;
 			}
 
-			function shouldWait()
-			{
-				if(gameState != GO)
-				{
-					return false;
-				}
-
-				if(unitDistance == (FAULT_FACTOR-1)*50)
-				{
-					return true;
-				}
-				if(unitDistance == 1)
-				{
-					return true;
-				}
-
-				return false;
-			}	
-			
 		
-			function go()
+			function onGo()
 			{
 
 				unitDistance++;
@@ -570,15 +597,23 @@
 				train.position.copy( position );
 				lookAt.copy(position).add(tangent);
 				train.lookAt( lookAt );
+
+				if(unitDistance == (FAULT_FACTOR-1)*50)
+				{
+					gameState = LESSON_STATE
+					shouldWait = true;
+				}
 			}
 
-			function beforeStart()
+			function onStart()
 			{
 				unitDistance++;
 
 				if(unitDistance >= 1000)
 				{
-					gameState = READY;
+					gameState = INSTRUCTION_STATE_1;
+					shouldWait = false;
+					return;
 				}
 
 				progress += (VELOCITY/2);
@@ -591,19 +626,48 @@
 			}
 
 
-			function ready()
-			{		
+			function reinit()
+			{
 				camera.position.x = 0.314
 				camera.position.y = 0.314
 				camera.position.z = 0;
 
-	
 				progress = 0;
 				unitDistance = 0;
 
-				writeLessons();
 
-				gameState = GO;
+				progress += VELOCITY;
+				progress = progress%1;
+				
+				position.copy( curve.getPointAt( progress ) );
+				tangent.copy( curve.getTangentAt( progress ) );
+			
+				position.y += 3;
+
+				train.position.copy( position );
+				lookAt.copy(position).add(tangent);
+				train.lookAt( lookAt );
+			}
+
+			function onReady()
+			{		
+		
+				if(gameState == INSTRUCTION_STATE_1)
+				{
+					writeLessons();
+					reinit();
+					shouldWait = true;
+				}
+				else if(gameState == INSTRUCTION_STATE_2)
+				{	
+					paintSecondInstruction();
+					shouldWait = true;
+				}
+			}
+
+			function onLesson()
+			{
+				shouldWait = true;
 			}
 
 

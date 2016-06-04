@@ -1,5 +1,5 @@
 /**
-	The Hero Object shall be a car that moves along path as directed by the Player. 
+	The Vehicle Object shall be a car that moves along the given path
 */
 
 class Vehicle
