@@ -27,6 +27,7 @@
 		<script src="distance/PandaPath.js"></script>
 		<script src="distance/Hero.js"></script>
 		<script src="distance/Vehicle.js"></script>
+		<script src="distance/Lesson.js"></script>
 
 		<script>
 
@@ -44,9 +45,8 @@
 
 			let SCALE = 100;			
 			let FAULT_FACTOR = 16;	
-			let DIVISION=4;
+			let DIVISION=3;
 			let PATH_LENGTH = SCALE/DIVISION;
-			
 			
 			let vehicle1_vel = 0.0003
 			let vehicle2_vel = 0.0004
@@ -63,13 +63,7 @@
 			var boardIndex = 0;
 					
 			var textureLoader = new THREE.TextureLoader();
-
-			var pandaTexture = textureLoader.load('textures/panda.jpg');
-			var pandaMaterial = new THREE.MeshBasicMaterial( {map:pandaTexture} );
-
-			var errorTexture = textureLoader.load('textures/error.png');
-			var errorMaterial = new THREE.MeshBasicMaterial( {map:errorTexture} );
-
+					
 			var boardMaterial = new THREE.MeshLambertMaterial( { color: "rgb(28,96, 97)"} );
 
 			var textMaterial = new THREE.MultiMaterial( [
@@ -77,11 +71,13 @@
 					new THREE.MeshPhongMaterial( { color: 0xffffff, shading: THREE.SmoothShading } ) // side
 				] );
 
-		
-			var lessonBoards = []
-		
-			var written=false;
-			var font;
+	
+			// Adaptive Learning to change the Path
+
+			let MENTORING_MODE;
+			let SELF_LEARNING_MODE;
+			let FREE_PLAY_MODE;
+
 
 			let BEFORE_START = 0;
 			let INSTRUCTION_STATE_1 = 1;		
@@ -89,13 +85,14 @@
 			let GO = 3;
 			let LESSON_STATE = 4;
 
+
 			var shouldWait = false;
 
 			var gameState=BEFORE_START;
-
 		
 			var touchX,touchY;
 
+			var lesson;
 
 			init();
 			animate();
@@ -139,10 +136,8 @@
 				
 				setupVehicles();
 
-				installLessonBoardAt(1);
-				
-				installLessonBoardAt(FAULT_FACTOR);
-				
+				setupInteractionPoints();
+
 				window.addEventListener( 'resize', onWindowResize, false );
 				
 				renderer.render( scene, camera );
@@ -353,168 +348,17 @@
 				unit.position.y-=0.85
 				unit.rotation.y = Math.PI
 			}
-		
-		
-			function installLessonBoardAt(id)
+
+			function setupInteractionPoints()
 			{
-				var warningMaterial = new THREE.MeshLambertMaterial( { color: "rgb(107,0, 1)"} );
-
-				var boardGeo = new THREE.BoxGeometry(10,4);
-				var warningInfoGeo = new THREE.BoxGeometry(4,2);
-			
-		
-				var place = 0.01 * (id); 
-				var point = curve.getPointAt(place);
-				var tangent = curve.getTangentAt(place);
-		
-				var lesson = new THREE.Group();
-
-				var board = new THREE.Mesh(boardGeo,boardMaterial);
-				var warningInfoLeft = new THREE.Mesh(warningInfoGeo,errorMaterial);
-				var warningInfoRight = new THREE.Mesh(warningInfoGeo,pandaMaterial);
-			
-				lesson.add(board);
-				lesson.add(warningInfoLeft)
-				lesson.add(warningInfoRight)
-			
-				lesson.position.copy(point);
-				lesson.position.y += 4.5
-				lesson.rotation.y = tangent.x-0.314
-				warningInfoLeft.position.y += 3
-				warningInfoLeft.position.x += 3
-			
-				warningInfoRight.position.y += 3
-				warningInfoRight.position.x -= 3
-			
-				lessonBoards.push(lesson);
-			
-				scene.add(lesson);				
+				lesson = new Lesson(scene);
+				lesson.installLessonBoardAt(1);				
+				lesson.installLessonBoardAt(FAULT_FACTOR);
 			}
-
-			function writeLessons()
-			{
-				if(written)
-				{
-					return;
-				}
-
-							
-				var loader = new THREE.FontLoader();
-				var fontName = 'helvetiker';
-				var fontWeight = 'bold';
-
-				loader.load( 'fonts/' + fontName + '_' + fontWeight + '.typeface.js', function ( response ) {
-
-					font = response;
-					paintFirstInstruction();
-					paintLesson(lessonBoards[1]);
-					written = true;
-				} );
-			}
-
-			function paintFirstInstruction()
-			{
 		
-				var textNode = lessonBoards[0];
-
-				var line1 = "Welcome to this Journey to Pandaras"
-				var line2 = "Pandaras is a wonderful city that is located at 25 metres from here."
-				var line3 = "You will travel on this elevated high-way that leads to Pandaras."
-				var line4 = "The high-way is built up with colored slabs."
-				var line5 = "Beware of broken slabs on the way."
-				var line6 = "Hint: Observe the number of slabs between posts."
-				var line7 = "A panda will help you on your mission."
-
-
-				var y = addHeaderText(textNode,line1,1.5);
-				y=addText(textNode,line2,y,"ins_1");
-				y=addText(textNode,line3,y,"ins_2");
-				y=addText(textNode,line4,y,"ins_3");
-				y=addText(textNode,line5,y,"ins_4");
-				y=addText(textNode,line6,y,"ins_5");
-				y=addText(textNode,line7,y,"ins_6");
-
-				textNode.rotation.y+=0.628
-			}
-
-			function paintSecondInstruction()
-			{
-		
-				removeText("ins_1")
-				removeText("ins_2")
-				removeText("ins_3")
-				removeText("ins_4")
-				removeText("ins_5")
-				removeText("ins_6")
-
-				var line = "Wishing you a safe journey."
-
-				var textNode = lessonBoards[0];
-				addText(textNode,line,1,"ins_2");
-			}
-
-			function removeText(name)
-			{
-				var selectedObject = scene.getObjectByName(name);
-				selectedObject.visible = false;				
-    			scene.remove( selectedObject );
-   			}
-
-			function paintLesson(textNode)
-			{
-		
-				var line1 = "What is the distance you travelled?"
-
-				var tiles = FAULT_FACTOR-1;
-
-				var line2 = "You travelled "+tiles+" slabs.";
-				var line3 = "You observed "+DIVISION+" slabs for every metre.";
-
-				var line4 = "Hence the length of one slab = 1 meter/"+DIVISION;
-				var line5 = "Thus the total distance travelled = "+tiles+" x 1/"+DIVISION+" metre."
-				
-				var line6 = "So, You travelled a distance of "+(tiles*1/DIVISION)+ " metre."
-
-				var y = addHeaderText(textNode,line1,1.5);
-				y=addText(textNode,line2,y,"lesson_l_1");
-				y=addText(textNode,line3,y,"lesson_l_2");
-				y=addText(textNode,line4,y,"lesson_l_3");
-				y=addText(textNode,line5,y,"lesson_l_4");
-				y=addText(textNode,line6,y,"lesson_l_5");
-			}
-
-			function addText(container,text,y,line_id)
-			{
-				var lineGeo = new THREE.TextGeometry( text, {font:font, size: 0.20, height:0.15, material: 0, extrudeMaterial: 1} )
-				var mesh = new THREE.Mesh(lineGeo,textMaterial);
-				container.add(mesh);
-
-
-				mesh.position.x+=4.5
-				mesh.position.y+=y
-				mesh.rotation.y = Math.PI
-				mesh.name = line_id
-
-				return y-0.5;
-			}
-
-			function addHeaderText(container,text,y)
-			{
-				var lineGeo = new THREE.TextGeometry( text, {font:font, size: 0.20, height:0.15, material: 0, extrudeMaterial: 1} )
-				var mesh = new THREE.Mesh(lineGeo,textMaterial);
-				container.add(mesh);
-
-				mesh.position.x+=2.5
-				mesh.position.y+=y
-				mesh.rotation.y = Math.PI
-
-				return y-0.5;
-			}
-
 			function animate() {
 
 				requestAnimationFrame( animate );
-
 			
 				executeState();
 			
@@ -583,7 +427,6 @@
 		
 			function onGo()
 			{
-
 				unitDistance++;
 
 				progress += VELOCITY;
@@ -601,7 +444,6 @@
 				if(unitDistance == (FAULT_FACTOR-1)*50)
 				{
 					gameState = LESSON_STATE
-					shouldWait = true;
 				}
 			}
 
@@ -635,7 +477,6 @@
 				progress = 0;
 				unitDistance = 0;
 
-
 				progress += VELOCITY;
 				progress = progress%1;
 				
@@ -651,22 +492,21 @@
 
 			function onReady()
 			{		
-		
 				if(gameState == INSTRUCTION_STATE_1)
 				{
-					writeLessons();
 					reinit();
-					shouldWait = true;
+					lesson.paintFirstInstruction();
 				}
 				else if(gameState == INSTRUCTION_STATE_2)
 				{	
-					paintSecondInstruction();
-					shouldWait = true;
+					lesson.paintSecondInstruction();
 				}
+				shouldWait = true;
 			}
 
 			function onLesson()
 			{
+				lesson.paintLesson();
 				shouldWait = true;
 			}
 
